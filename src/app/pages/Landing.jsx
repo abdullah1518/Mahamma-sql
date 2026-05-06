@@ -111,7 +111,7 @@ export function Landing() {
             <div className="relative">
               <div className="aspect-square rounded-2xl overflow-hidden shadow-2xl">
                 <ImageWithFallback
-                  src="/public/students.jpg"
+                  src="https://che.kfupm.edu.sa/images/default-source/default-album/students.jpg?sfvrsn=2131442d_1&MaxWidth=800&MaxHeight=600&ScaleUp=false&Quality=High&Method=ResizeFitToAreaArguments&Signature=FE3E0A88A9192627E88738FD8468FEE7578E9F61"
                   alt="KFUPM Students Collaboration"
                   className="w-full h-full object-cover"
                 />
