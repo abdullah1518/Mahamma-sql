@@ -1,6 +1,6 @@
 export const API_URL = (
   import.meta.env.VITE_API_URL || 
-  (import.meta.env.PROD ? "/api" : "http://localhost:5000/api")
+  (window.location.hostname === "localhost" ? "http://localhost:5000/api" : "/api")
 ).replace(/\/$/, "");
 
 export const getStoredUserInfo = () => {
