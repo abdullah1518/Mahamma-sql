@@ -1,22 +1,27 @@
-import mongoose from "mongoose";
+import pkg from "pg";
+const { Pool } = pkg;
+import dotenv from "dotenv";
 
-const connectDB = async () => {
+dotenv.config();
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+pool.on("error", (err) => {
+  console.error("Unexpected error on idle client", err);
+  process.exit(-1);
+});
+
+export const connectDB = async () => {
   try {
-    if (!process.env.MONGO_URI) {
-      throw new Error("MONGO_URI is not set");
-    }
-
-    const conn = await mongoose.connect(process.env.MONGO_URI, {
-      dbName: process.env.MONGO_DB_NAME || "mahamma",
-    });
-
-    console.log(
-      `MongoDB Connected: ${conn.connection.host}/${conn.connection.name}`
-    );
-  } catch (error) {
-    console.error(`Error: ${error.message}`);
-    process.exit(1);
+    const client = await pool.connect();
+    console.log("PostgreSQL Connected");
+    client.release();
+  } catch (err) {
+    console.error("Error connecting to PostgreSQL", err);
+    process.exit(-1);
   }
 };
 
-export default connectDB;
+export default pool;

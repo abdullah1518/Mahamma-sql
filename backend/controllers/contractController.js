@@ -1,54 +1,40 @@
-import Contract from "../models/Contract.js";
-import Proposal from "../models/Proposal.js";
-import Task from "../models/Task.js";
-import { createNotification } from "../utils/createNotification.js";
+import pool from "../config/db.js";
 
-// @desc    Get all contracts for the logged-in user
-// @route   GET /api/contracts
-// @access  Private
-export const getMyContracts = async (req, res, next) => {
+export const getContracts = async (req, res, next) => {
   try {
-    const query =
-      req.user.Role === "admin"
-        ? {}
-        : req.user.Role === "client"
-        ? { ClientID: req.user._id }
-        : { ProviderID: req.user._id };
-
-    const contracts = await Contract.find(query)
-      .populate("TaskID", "Title Description Category")
-      .populate("ClientID", "Name Email")
-      .populate("ProviderID", "Name Email Rating")
-      .populate("ProposalID", "BidAmount EstimatedTime CoverLetter")
-      .sort({ createdAt: -1 });
-
-    res.json(contracts);
+    // Only get contracts where the user is either the client or the freelancer
+    const result = await pool.query(`
+      SELECT c.*, p.freelancer_id, g.client_id
+      FROM contract c
+      JOIN proposal p ON c.proposal_id = p.proposal_id
+      JOIN gig g ON p.gig_id = g.gig_id
+      WHERE g.client_id = $1 OR p.freelancer_id = $1
+      ORDER BY c.start_date DESC
+    `, [req.user.id]);
+    res.json(result.rows);
   } catch (error) {
     next(error);
   }
 };
 
-// @desc    Get contract by ID
-// @route   GET /api/contracts/:id
-// @access  Private
 export const getContractById = async (req, res, next) => {
   try {
-    const contract = await Contract.findById(req.params.id)
-      .populate("TaskID", "Title Description Category Budget")
-      .populate("ClientID", "Name Email")
-      .populate("ProviderID", "Name Email Rating")
-      .populate("ProposalID", "BidAmount EstimatedTime CoverLetter");
+    const result = await pool.query(`
+      SELECT c.*, p.freelancer_id, g.client_id
+      FROM contract c
+      JOIN proposal p ON c.proposal_id = p.proposal_id
+      JOIN gig g ON p.gig_id = g.gig_id
+      WHERE c.contract_id = $1
+    `, [req.params.id]);
+
+    const contract = result.rows[0];
 
     if (!contract) {
       res.status(404);
       throw new Error("Contract not found");
     }
 
-    const isParty =
-      contract.ClientID._id.toString() === req.user._id.toString() ||
-      contract.ProviderID._id.toString() === req.user._id.toString();
-
-    if (!isParty && req.user.Role !== "admin") {
+    if (contract.client_id !== req.user.id && contract.freelancer_id !== req.user.id) {
       res.status(403);
       throw new Error("Not authorized to view this contract");
     }
@@ -59,178 +45,78 @@ export const getContractById = async (req, res, next) => {
   }
 };
 
-// @desc    Create a contract from an accepted proposal
-// @route   POST /api/contracts
-// @access  Private (client only)
 export const createContract = async (req, res, next) => {
   try {
-    const { ProposalID, DeliveryDate, Deadline } = req.body;
-    const requestedDeliveryDate = DeliveryDate || Deadline;
+    const { proposal_id, agreed_amount, start_date, delivery_date } = req.body;
+    
+    // Check if user is the client of the gig
+    const propResult = await pool.query(`
+      SELECT g.client_id, p.status FROM proposal p JOIN gig g ON p.gig_id = g.gig_id WHERE p.proposal_id = $1
+    `, [proposal_id]);
 
-    if (!ProposalID || !requestedDeliveryDate) {
-      res.status(400);
-      throw new Error("ProposalID and DeliveryDate are required");
-    }
-
-    const proposal = await Proposal.findById(ProposalID).populate(
-      "TaskID",
-      "ClientID Status"
-    );
-
-    if (!proposal) {
+    if (propResult.rows.length === 0) {
       res.status(404);
       throw new Error("Proposal not found");
     }
 
-    if (proposal.TaskID.ClientID.toString() !== req.user._id.toString()) {
+    if (propResult.rows[0].client_id !== req.user.id) {
       res.status(403);
-      throw new Error("Not authorized to create a contract for this proposal");
+      throw new Error("Only the client can create a contract");
     }
 
-    if (proposal.Status !== "accepted") {
+    if (propResult.rows[0].status !== "Accepted") {
       res.status(400);
-      throw new Error("Proposal must be accepted before creating a contract");
+      throw new Error("Cannot create a contract for a proposal that is not accepted");
     }
 
-    const existingContract = await Contract.findOne({ ProposalID });
-    if (existingContract) {
-      res.status(400);
-      throw new Error("A contract already exists for this proposal");
-    }
+    const result = await pool.query(`
+      INSERT INTO contract (proposal_id, agreed_amount, start_date, delivery_date)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+    `, [proposal_id, agreed_amount, start_date, delivery_date]);
 
-    const deliveryDate = new Date(requestedDeliveryDate);
-    if (isNaN(deliveryDate.getTime()) || deliveryDate <= new Date()) {
-      res.status(400);
-      throw new Error("DeliveryDate must be a valid future date");
-    }
-
-    const contract = await Contract.create({
-      ProposalID,
-      TaskID: proposal.TaskID._id,
-      ClientID: req.user._id,
-      ProviderID: proposal.FreelancerID,
-      AgreedAmount: proposal.BidAmount,
-      DeliveryDate: deliveryDate,
-    });
-
-    const populated = await Contract.findById(contract._id)
-      .populate("TaskID", "Title Description")
-      .populate("ClientID", "Name Email")
-      .populate("ProviderID", "Name Email")
-      .populate("ProposalID", "BidAmount EstimatedTime");
-
-    await createNotification({
-      userId: contract.ProviderID,
-      type: "contract",
-      title: "New contract started",
-      description: `A contract for "${populated.TaskID.Title}" has started.`,
-      actionUrl: `/client/jobs/${contract._id}`,
-      metadata: {
-        contractId: contract._id,
-        taskId: contract.TaskID,
-      },
-    });
-
-    res.status(201).json(populated);
+    res.status(201).json(result.rows[0]);
   } catch (error) {
     next(error);
   }
 };
 
-// @desc    Update contract status
-// @route   PUT /api/contracts/:id/status
-// @access  Private (parties to the contract)
 export const updateContractStatus = async (req, res, next) => {
   try {
-    const { Status } = req.body;
+    const { status } = req.body; // Active, Completed, Cancelled, Disputed
+    
+    const checkResult = await pool.query(`
+      SELECT c.*, p.freelancer_id, g.client_id, g.gig_id
+      FROM contract c
+      JOIN proposal p ON c.proposal_id = p.proposal_id
+      JOIN gig g ON p.gig_id = g.gig_id
+      WHERE c.contract_id = $1
+    `, [req.params.id]);
 
-    if (!["delivered", "completed", "cancelled"].includes(Status)) {
-      res.status(400);
-      throw new Error("Status must be 'delivered', 'completed', or 'cancelled'");
-    }
-
-    const contract = await Contract.findById(req.params.id);
-
+    const contract = checkResult.rows[0];
     if (!contract) {
       res.status(404);
       throw new Error("Contract not found");
     }
 
-    const isParty =
-      contract.ClientID.toString() === req.user._id.toString() ||
-      contract.ProviderID.toString() === req.user._id.toString();
-
-    if (!isParty && req.user.Role !== "admin") {
+    if (contract.client_id !== req.user.id && contract.freelancer_id !== req.user.id) {
       res.status(403);
       throw new Error("Not authorized to update this contract");
     }
 
-    const isClient = contract.ClientID.toString() === req.user._id.toString();
-    const isProvider = contract.ProviderID.toString() === req.user._id.toString();
-    const isAdmin = req.user.Role === "admin";
+    const completionDate = status === 'Completed' ? new Date() : null;
 
-    if (["completed", "cancelled"].includes(contract.Status)) {
-      res.status(400);
-      throw new Error("Completed or cancelled contracts cannot be updated");
+    const result = await pool.query(`
+      UPDATE contract SET status = $1, completion_date = COALESCE($2, completion_date) WHERE contract_id = $3 RETURNING *
+    `, [status, completionDate, req.params.id]);
+
+    if (status === 'Completed') {
+       await pool.query("UPDATE gig SET status = 'Completed' WHERE gig_id = $1", [contract.gig_id]);
+    } else if (status === 'Cancelled') {
+       await pool.query("UPDATE gig SET status = 'Cancelled' WHERE gig_id = $1", [contract.gig_id]);
     }
 
-    if (Status === "delivered" && !isProvider && !isAdmin) {
-      res.status(403);
-      throw new Error("Only the provider can mark this contract as delivered");
-    }
-
-    if (Status === "completed" && !isClient && !isAdmin) {
-      res.status(403);
-      throw new Error("Only the client can complete this contract");
-    }
-
-    if (Status === "delivered" && contract.Status !== "active") {
-      res.status(400);
-      throw new Error("Only active contracts can be marked as delivered");
-    }
-
-    if (Status === "completed" && !["active", "delivered"].includes(contract.Status)) {
-      res.status(400);
-      throw new Error("Only active or delivered contracts can be completed");
-    }
-
-    contract.Status = Status;
-    const updated = await contract.save();
-
-    if (Status === "completed") {
-      await Task.findByIdAndUpdate(contract.TaskID, { Status: "completed" });
-    } else if (Status === "cancelled") {
-      await Task.findByIdAndUpdate(contract.TaskID, { Status: "cancelled" });
-    }
-
-    const otherUserId =
-      contract.ClientID.toString() === req.user._id.toString()
-        ? contract.ProviderID
-        : contract.ClientID;
-
-    await createNotification({
-      userId: otherUserId,
-      type: "contract",
-      title:
-        Status === "delivered"
-          ? "Work delivered"
-          : Status === "completed"
-          ? "Contract completed"
-          : "Contract cancelled",
-      description:
-        Status === "delivered"
-          ? "A contract you are part of was marked delivered."
-          : Status === "completed"
-          ? "A contract you are part of was marked completed."
-          : "A contract you are part of was cancelled.",
-      actionUrl: `/client/jobs/${contract._id}`,
-      metadata: {
-        contractId: contract._id,
-        status: Status,
-      },
-    });
-
-    res.json(updated);
+    res.json(result.rows[0]);
   } catch (error) {
     next(error);
   }

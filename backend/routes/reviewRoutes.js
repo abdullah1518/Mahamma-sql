@@ -1,15 +1,14 @@
 import express from "express";
 import {
-  getReviewById,
-  deleteReview,
-  getReviewsByProvider,
+  getReviewsByStudent,
+  createReview,
 } from "../controllers/reviewController.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { validateReview } from "../middleware/validateMiddleware.js";
 
 const router = express.Router();
 
-router.get("/provider/:providerId", getReviewsByProvider);
-router.get("/:id", getReviewById);
-router.delete("/:id", protect, deleteReview);
+router.get("/student/:studentId", getReviewsByStudent);
+router.post("/", protect, validateReview, createReview);
 
 export default router;

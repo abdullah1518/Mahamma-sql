@@ -1,0 +1,364 @@
+ICS 321 - Database Systems  
+ 
+  Project Title: Mahamma – Campus -Centric Freelance 
+Marketplace Database  
+Phase 2: Logical Design & Server Implementation  
+Team Members:  Abdullah Binsheheween, Ayman Musali, 
+Anas Alfaifi  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 1. Introduction  
+This document presents Phase 2 of the Mahamma project — the campus -centric freelance 
+marketplace database introduced in Phase 1. Phase 2 covers the transition from the conceptual 
+Entity -Relationship model to a fully implemented relational database in Postg reSQL, including 
+all integrity constraints, derived -attribute logic, indexing strategy, and a populated set of sample 
+data.  
+During the implementation phase, we revisited and refined our original ER model based on a 
+careful re -reading of the problem statement. Several gaps were identified — particularly around 
+milestone tracking, skill -based matchmaking, and bidirectional review s — and have now been 
+incorporated into the schema. The revised design is presented below.  
+2. Revisions to the Conceptual Model  
+Phase 1 delivered a solid foundation, but moving toward implementation revealed a number of 
+refinements that strengthen the design and align it more closely with the stated objectives. The 
+changes below are additive rather than destructive — the core entit ies (Student, Gig, Proposal, 
+Contract, Review) remain intact.  
+2.1 New Entity: Milestone  
+The original ER model represented an entire contract by a single DeliveryDate, which 
+contradicts the problem statement's emphasis on milestone tracking. A new weak -style entity 
+Milestone has been added, owned by Contract through a one -to-many relationship.  Each 
+milestone carries its own description, due date, partial amount, and lifecycle status.  
+2.2 New Relationship: Gig requires Skill  
+Skill was defined in Phase 1 but only loosely connected to Student. A gig now declares the skills 
+it requires through a many -to-many relationship implemented as the gig_skill junction table. This 
+unlocks freelancer matchmaking — a key feature of any freela nce platform.  
+2.3 New Relationship: Student possesses Skill  
+The 'possesses' relationship between Student and Skill is now formalized as a many -to-many 
+relationship resolved by the student_skill junction table, including a proficiency_level attribute 
+(Beginner / Intermediate / Advanced / Expert).  
+2.4 Strengthened Review Entity  
+Review now records both reviewer_id and reviewee_id, supporting bidirectional reviews (client 
+↔ freelancer). A CHECK constraint enforces that reviewer_id ≠ reviewee_id, and a UNIQUE 
+constraint on (contract_id, reviewer_id) prevents a single party from posting more than one 
+review per contract.  
+2.5 New Status Attributes  
+A status attribute was added to Proposal (Pending / Accepted / Rejected / Withdrawn) so the 
+bidding lifecycle can be tracked. Status fields on Gig, Contract, and Milestone were promoted to 
+PostgreSQL ENUM types for type safety and storage efficiency.  
+2.6 Derived Attribute: Student Rating  The rating column on Student is a derived attribute: it is automatically recalculated by a trigger 
+function (update_student_rating) every time a review is inserted, updated, or deleted. The 
+stored value is therefore always consistent with the underlying re view data, while remaining 
+cheap to read at query time.  
+3. Updated Entity -Relationship Diagram  
+The revised ER diagram below incorporates all the changes described in Section 2. It includes 
+the new Milestone entity, both junction relationships (student_skill and gig_skill), the dual -party 
+review structure, and explicit cardinality and participation c onstraints on every relationship.  
+ 
+Figure 1. Revised Entity -Relationship Diagram for the Mahamma platform.  
+4. Logical Design — Relational Schema  
+This section translates each entity and relationship into a relational table. Primary keys are 
+underlined by convention; foreign keys reference the parent table in parentheses. All tables use 
+SERIAL primary keys (PostgreSQL auto -increment) and snake_case c olumn naming.  
+4.1 Schema Summary  
+The database consists of nine tables organized into three logical groups:  
+• Identity & Catalogue: student, skill, student_skill  
+• Job Lifecycle: gig, gig_skill, proposal, contract, milestone  
+• Reputation: review  
+4.2 Custom ENUM Types  
+PostgreSQL ENUM types are used in place of free -text VARCHAR for all status fields. This 
+guarantees type safety at the database level and prevents subtle bugs (e.g., 'Completed' vs 
+'completed' vs 'Complted') from corrupting status filters.  
+• gig_status: Open, In Progress, Completed, Cancelled  
+• proposal_status: Pending, Accepted, Rejected, Withdrawn  
+• contract_status: Active, Completed, Cancelled, Disputed  
+• milestone_status: Pending, In Progress, Submitted, Approved, Rejected  
+• proficiency_level: Beginner, Intermediate, Advanced, Expert  
+4.3 Relationships Summary  
+The table below summarizes every relationship encoded in the schema, together with its 
+cardinality and a one -line description.  
+From  To Cardinality  Meaning  
+student  gig 1 : N A student (as Client) posts many gigs; 
+each gig has one client.  
+student  proposal  1 : N A student (as Freelancer) submits many 
+proposals.  
+gig proposal  1 : N A gig receives many proposals; each 
+proposal targets one gig.  
+proposal  contract  1 : 1 An accepted proposal results in exactly 
+one contract.  
+contract  milestone  1 : N A contract is broken into many milestones.  
+contract  review  1 : N A contract may have up to two reviews 
+(one per party).  
+student  skill M : N  Resolved via student_skill (with 
+proficiency_level).  
+gig skill M : N  Resolved via gig_skill (required skills).  
+student  review  1 : N 
+(reviewer)  A student writes many reviews.  
+student  review  1 : N 
+(reviewee)  A student receives many reviews; trigger 
+updates rating.  
+ 
+5. Detailed Table Specifications  Each subsection below describes one table: its purpose within the system, its columns and 
+constraints, and a screenshot of the populated table from PostgreSQL (pgAdmin / psql).  
+5.1  student  
+Stores all registered KFUPM students. A student can act simultaneously as a Client (posting 
+gigs) and as a Freelancer (submitting proposals), implementing the dual -role capability required 
+by the Mahamma system. The rating column is a derived attribute, au tomatically maintained by 
+a trigger that averages the scores from received reviews.  
+Column  Data Type  Constraints  Description  
+id SERIAL  PRIMARY KEY  Unique student identifier.  
+name  VARCHAR(100)  NOT NULL  Full name of the student.  
+major  VARCHAR(100)  NOT NULL  Academic major (e.g., ICS, COE, 
+SWE).  
+email  VARCHAR(150)  UNIQUE, NOT NULL, 
+CHECK (email LIKE 
+'%@%.%')  KFUPM email address.  
+phone  VARCHAR(20)  NULL  Optional contact number.  
+rating  DECIMAL(3,2)  NOT NULL, DEFAULT 
+0.00, CHECK (rating 
+BETWEEN 0 AND 5)  Derived: average score of all 
+reviews received.  
+created_at  TIMESTAMPTZ  NOT NULL, DEFAULT 
+NOW()  Account creation timestamp.  
+updated_at  TIMESTAMPTZ  NOT NULL, DEFAULT 
+NOW()  Last profile update (auto -stamped 
+by trigger).  
+ 
+Figure 2. Sample data from the student table.  
+5.2  skill  
+A controlled vocabulary of skills offered or required on the platform. Skills are grouped into 
+categories (Programming, Design, Academic, Engineering) so the front -end can offer faceted 
+browsing and matchmaking between gigs and freelancers.  
+Column  Data Type  Constraints  Description  
+skill_id  SERIAL  PRIMARY KEY  Unique skill identifier.  
+skill_name  VARCHAR(100)  UNIQUE, NOT NULL  The name of the skill (e.g., Python, 
+AutoCAD).  
+category  VARCHAR(100)  NOT NULL  High-level grouping for the skill.  
+ 
+Figure 3. Sample data from the skill table.  
+5.3  student_skill  
+Junction table resolving the many -to-many relationship between students and skills. Each entry 
+records that a student possesses a particular skill at a stated proficiency level, supporting 
+accurate freelancer matchmaking.  
+Column  Data Type  Constraints  Description  
+student_id  INT FK → student(id), ON 
+DELETE CASCADE  The student who possesses the 
+skill. 
+skill_id  INT FK → skill(skill_id), ON 
+DELETE CASCADE  The skill possessed.  
+proficiency_level  proficiency_level  NOT NULL  Beginner / Intermediate / 
+Advanced / Expert.  
+PRIMARY KEY  (student_id, 
+skill_id)  Composite key  Prevents duplicate skill entries per 
+student.  
+ 
+Figure 4. Sample data from the student_skill table.  
+5.4  gig  
+Represents a job posting created by a client. Each gig describes the work to be done, the 
+budget offered, and a deadline. The status column tracks the lifecycle of the gig from Open 
+through In Progress to Completed or Cancelled.  
+Column  Data Type  Constraints  Description  
+gig_id  SERIAL  PRIMARY KEY  Unique gig identifier.  
+client_id  INT NOT NULL, FK → 
+student(id), ON 
+DELETE RESTRICT  Student who posted the gig.  
+title VARCHAR(200)  NOT NULL  Short headline for the gig.  
+description  TEXT  NULL  Detailed requirements.  
+Column  Data Type  Constraints  Description  
+budget  DECIMAL(10,2)  NOT NULL, CHECK 
+(budget > 0)  Maximum amount the client is 
+willing to pay.  
+deadline  DATE  NOT NULL, CHECK 
+(deadline > 
+posted_date)  Date by which the work must be 
+delivered.  
+status  gig_status  NOT NULL, DEFAULT 
+'Open'  Open / In Progress / Completed / 
+Cancelled.  
+posted_date  TIMESTAMPTZ  NOT NULL, DEFAULT 
+NOW()  When the gig was published.  
+created_at / 
+updated_at  TIMESTAMPTZ  NOT NULL, DEFAULT 
+NOW()  Audit timestamps (updated_at 
+auto-stamped by trigger).  
+ 
+Figure 5. Sample data from the gig table.  
+5.5  gig_skill  
+Junction table specifying which skills are required by a particular gig. This enables the front -end 
+to recommend the most suitable freelancers for each open gig.  
+Column  Data Type  Constraints  Description  
+gig_id  INT FK → gig(gig_id ), ON 
+DELETE CASCADE  The gig requiring the skill.  
+skill_id  INT FK → skill(skill_id), ON 
+DELETE CASCADE  The skill required.  
+PRIMARY KEY  (gig_id, skill_id)  Composite key  Prevents duplicate skill 
+requirements per gig.  
+ 
+Figure 6. Sample data from the gig_skill table.  
+5.6  proposal  
+A bid submitted by a freelancer in response to a gig. Each proposal captures the offered 
+amount, estimated time, and a cover letter. The status field tracks whether the proposal is 
+Pending, Accepted, Rejected, or Withdrawn — only Accepted proposals can be promoted to a 
+Contract.  
+Column  Data Type  Constraints  Description  
+proposal_id  SERIAL  PRIMARY KEY  Unique proposal identifier.  
+gig_id  INT NOT NULL, FK → 
+gig(gig_id), ON 
+DELETE RESTRICT  The gig being bid on.  
+freelancer_id  INT NOT NULL, FK → 
+student(id), ON 
+DELETE RESTRICT  Student submitting the bid.  
+bid_amount  DECIMAL(10,2)  NOT NULL, CHECK 
+(bid_amount > 0)  Amount offered by the freelancer.  
+estimated_time  INT NOT NULL, CHECK 
+(estimated_time > 0)  Estimated duration in working 
+days.  
+cover_letter  TEXT  NULL  Optional pitch from the freelancer.  
+status  proposal_status  NOT NULL, DEFAULT 
+'Pending'  Pending / Accepted / Rejected / 
+Withdrawn.  
+Column  Data Type  Constraints  Description  
+submitted_date  TIMESTAMPTZ  NOT NULL, DEFAULT 
+NOW()  When the proposal was submitted.  
+ 
+Figure 7. Sample data from the proposal table.  
+5.7  contract  
+Created when a client accepts a proposal. A contract formalizes the agreement and is the 
+central object for milestone and review tracking. Each accepted proposal produces exactly one 
+contract (UNIQUE constraint on proposal_id).  
+Column  Data Type  Constraints  Description  
+contract_id  SERIAL  PRIMARY KEY  Unique contract identifier.  
+proposal_id  INT NOT NULL, UNIQUE, 
+FK → 
+proposal(proposal_id), 
+ON DELETE 
+RESTRICT  The proposal that produced this 
+contract.  
+status  contract_status  NOT NULL, DEFAULT 
+'Active'  Active / Completed / Cancelled / 
+Disputed.  
+agreed_amount  DECIMAL(10,2)  NOT NULL, CHECK 
+(agreed_amount > 0)  Final negotiated amount (may 
+differ from bid).  
+start_date  DATE  NOT NULL  Date work begins.  
+delivery_date  DATE  NOT NULL  Planned delivery date.  
+completion_date  DATE  NULL  Actual completion date, if 
+completed.  
+ 
+Figure 8. Sample data from the contract table.  
+5.8  milestone  
+A weak -style entity owned by a contract that breaks the work into smaller, trackable 
+deliverables. This addresses the 'Scattered Project Management' problem identified in the 
+problem statement by giving structure to the lifecycle of every contract.  
+Column  Data Type  Constraints  Description  
+milestone_id  SERIAL  PRIMARY KEY  Unique milestone identifier.  
+contract_id  INT NOT NULL, FK → 
+contract(contract_id), 
+ON DELETE CASCADE  The parent contract.  
+description  TEXT  NOT NULL  What this milestone delivers.  
+due_date  DATE  NOT NULL  When this milestone is due.  
+amount  DECIMAL(10,2)  NOT NULL, CHECK 
+(amount > 0)  Portion of the contract released on 
+approval.  
+status  milestone_status  NOT NULL, DEFAULT 
+'Pending'  Pending / In Progress / Submitted / 
+Approved / Rejected.  
+ 
+Figure 9. Sample data from the milestone table.  
+5.9  review  
+Records peer feedback at the end of a contract. Both parties (client and freelancer) can review 
+each other, supporting the bidirectional trust system. A trigger on this table automatically 
+recalculates the average rating of the reviewee whenever a review i s inserted, updated, or 
+deleted.  
+Column  Data Type  Constraints  Description  
+review_id  SERIAL  PRIMARY KEY  Unique review identifier.  
+contract_id  INT NOT NULL, FK → 
+contract(contract_id), 
+ON DELETE CASCADE  The contract being reviewed.  
+reviewer_id  INT NOT NULL, FK → 
+student(id), ON 
+DELETE RESTRICT  The student writing the review.  
+reviewee_id  INT NOT NULL, FK → 
+student(id), ON 
+DELETE RESTRICT  The student being reviewed.  
+score  INT NOT NULL, CHECK 
+(score BETWEEN 1 
+AND 5)  Rating from 1 to 5.  
+comment  TEXT  NULL  Optional written feedback.  
+review_date  TIMESTAMPTZ  NOT NULL, DEFAULT 
+NOW()  When the review was posted.  
+UNIQUE  (contract_id, 
+reviewer_id)  — One review per reviewer per 
+contract.  
+CHECK  reviewer_id <> 
+reviewee_id  — Cannot review yourself.  
+ 
+Figure 10. Sample data from the review table.  
+6. Integrity Constraints  
+Beyond primary and foreign keys, the schema enforces a number of CHECK constraints and 
+UNIQUE constraints to protect data quality at the database layer:  
+• Domain checks: score BETWEEN 1 AND 5; rating BETWEEN 0 AND 5; budget > 0; 
+bid_amount > 0; agreed_amount > 0; estimated_time > 0; email LIKE '%@%.%'.  
+• Business rules: deadline > posted_date; reviewer_id ≠ reviewee_id; one contract per 
+proposal (UNIQUE on contract.proposal_id); one review per reviewer per contract 
+(UNIQUE on (contract_id, reviewer_id)).  
+• Referential actions: CASCADE on junction tables (student_skill, gig_skill) and on 
+dependent records (milestone, review). RESTRICT on student references from gig and 
+proposal, on the proposal → contract relationship, and on student references from 
+review — preventing the silent loss of work history when a related record is deleted.  
+7. Indexing Strategy  
+PostgreSQL does not automatically index foreign -key columns. To keep JOIN performance 
+acceptable as the dataset grows, explicit indexes have been added on every foreign key, on 
+frequently filtered status columns (gig.status, proposal.status, contract.statu s), and on 
+gig.posted_date for browsing the newest gigs. A partial index on gig(posted_date DESC) 
+WHERE status = 'Open' accelerates the most common front -end query — listing all currently 
+open gigs — while keeping the index size minimal.  
+8. Triggers and Derived Logic  
+8.1  update_student_rating()  
+A row -level trigger on the review table fires AFTER INSERT, UPDATE, or DELETE. It 
+recalculates the average score of all reviews received by the affected reviewee and writes the 
+rounded result back to student.rating. UPDATE handlers correctly process both t he OLD and 
+NEW reviewee_id, ensuring ratings remain consistent even when a review is reassigned.  
+8.2  set_updated_at()  
+A generic BEFORE UPDATE trigger function applied to the two tables that carry an updated_at 
+column — student and gig. It sets updated_at = NOW() on every UPDATE, providing automatic 
+auditing without requiring application -side bookkeeping. Defining the func tion once and 
+attaching it to multiple tables keeps the logic DRY and the schema easy to maintain.  
+9. Sample Data Strategy  
+The seed.sql script populates each table with realistic sample data drawn from the KFUPM 
+context — majors include ICS, COE, SWE, EE, and ME; emails follow the @kfupm.edu.sa 
+pattern; skills span Programming, Design, Academic, and Engineering categories. Ins erts use 
+JOIN -based lookups rather than hard -coded surrogate IDs, so the script remains correct on 
+every re -run. The data is engineered to tell a coherent story:  
+• 12 students with overlapping skill sets, several active as both clients and freelancers.  
+• 12 skills across four categories (Programming, Design, Academic, Engineering).  
+• 24 student –skill associations with proficiency levels.  
+• 12 gigs with varied statuses (6 Open, 3 In Progress, 3 Completed).  
+• 18 gig –skill associations declaring the skills required by each gig.  
+• 15 proposals across multiple gigs, exercising every proposal_status value.  
+• 6 contracts derived from Accepted proposals.  
+• 13 milestones distributed across in -flight and completed contracts.  
+• 6 reviews on Completed contracts; ratings are computed automatically by the trigger 
+rather than hard -coded.  All inserts are wrapped in a single transaction (BEGIN … COMMIT), so the seed script either 
+fully succeeds or rolls back cleanly — making it safe to run repeatedly during development.  
+10. Project Repository  
+The complete schema.sql and seed.sql files, together with this report, are version -controlled at:  
+https://github.com/airqx/Mahamma -Db.git  
+11. Conclusion  
+Phase 2 closes the gap between the conceptual model and a working PostgreSQL database. 
+The revised schema is normalised, defensively constrained at the database layer, and prepared 
+to scale through indexing and trigger -based derived attributes. The system now provides a solid 
+foundation on which the Phase 3 user interface and queries will be built.  

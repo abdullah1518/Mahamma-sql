@@ -1,29 +1,24 @@
 import express from "express";
 import {
-  getProposalsByTask,
+  getProposalsByGig,
   getProposalById,
   createProposal,
   updateProposalStatus,
   deleteProposal,
 } from "../controllers/proposalController.js";
 import { protect } from "../middleware/authMiddleware.js";
-import { requireRole } from "../middleware/roleMiddleware.js";
 import { validateProposal } from "../middleware/validateMiddleware.js";
 
 const router = express.Router({ mergeParams: true });
 
-// Routes mounted under /api/tasks/:taskId/proposals
-router
-  .route("/")
-  .get(protect, getProposalsByTask)
-  .post(protect, requireRole("provider"), validateProposal, createProposal);
+router.route("/").get(protect, getProposalsByGig).post(protect, validateProposal, createProposal);
 
-// Routes mounted under /api/proposals
-const standaloneRouter = express.Router();
+export const standaloneRouter = express.Router();
+standaloneRouter
+  .route("/:id")
+  .get(protect, getProposalById)
+  .delete(protect, deleteProposal);
 
-standaloneRouter.get("/:id", protect, getProposalById);
-standaloneRouter.put("/:id/status", protect, requireRole("client"), updateProposalStatus);
-standaloneRouter.delete("/:id", protect, requireRole("provider"), deleteProposal);
+standaloneRouter.put("/:id/status", protect, updateProposalStatus);
 
-export { standaloneRouter };
 export default router;

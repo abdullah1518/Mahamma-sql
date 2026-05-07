@@ -142,6 +142,13 @@ npm install
 npm run dev
 ```
 
+### Test Accounts
+You can log in to the application using any of the following seeded user accounts. All accounts use the password **`123456`**:
+- `abdullah@kfupm.edu.sa` (Role: Client / Freelancer)
+- `ayman@kfupm.edu.sa` (Role: Client / Freelancer)
+- `anas@kfupm.edu.sa` (Role: Client / Freelancer)
+- `mohammed@kfupm.edu.sa` (Role: Client / Freelancer)
+
 The app will be available at `http://localhost:5173`.
 
 For local development, the frontend defaults to `http://localhost:5000/api`.
