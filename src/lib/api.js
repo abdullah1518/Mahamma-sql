@@ -57,21 +57,21 @@ export const getProfile = async () => {
   return handleResponse(res);
 };
 
-// ─── TASKS ───────────────────────────────────────────────────────────────────
+// ─── GIGS ───────────────────────────────────────────────────────────────────
 
 export const getTasks = async (params = {}) => {
   const query = new URLSearchParams(params).toString();
-  const res = await fetch(`${API_URL}/tasks${query ? `?${query}` : ""}`);
+  const res = await fetch(`${API_URL}/gigs${query ? `?${query}` : ""}`);
   return handleResponse(res);
 };
 
 export const getTaskById = async (id) => {
-  const res = await fetch(`${API_URL}/tasks/${id}`);
+  const res = await fetch(`${API_URL}/gigs/${id}`);
   return handleResponse(res);
 };
 
 export const createTask = async (taskData) => {
-  const res = await fetch(`${API_URL}/tasks`, {
+  const res = await fetch(`${API_URL}/gigs`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify(taskData),
@@ -80,7 +80,7 @@ export const createTask = async (taskData) => {
 };
 
 export const updateTask = async (id, taskData) => {
-  const res = await fetch(`${API_URL}/tasks/${id}`, {
+  const res = await fetch(`${API_URL}/gigs/${id}`, {
     method: "PUT",
     headers: getAuthHeaders(),
     body: JSON.stringify(taskData),
@@ -89,107 +89,31 @@ export const updateTask = async (id, taskData) => {
 };
 
 export const deleteTask = async (id) => {
-  const res = await fetch(`${API_URL}/tasks/${id}`, {
+  const res = await fetch(`${API_URL}/gigs/${id}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
   });
   return handleResponse(res);
 };
 
-// ─── SERVICES ────────────────────────────────────────────────────────────────
-
-export const getServices = async (params = {}) => {
-  const query = new URLSearchParams(params).toString();
-  const res = await fetch(`${API_URL}/services${query ? `?${query}` : ""}`);
-  return handleResponse(res);
-};
-
-export const getServiceById = async (id) => {
-  const res = await fetch(`${API_URL}/services/${id}`);
-  return handleResponse(res);
-};
-
-export const createService = async (serviceData) => {
-  const res = await fetch(`${API_URL}/services`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify(serviceData),
-  });
-  return handleResponse(res);
-};
-
-export const updateService = async (id, serviceData) => {
-  const res = await fetch(`${API_URL}/services/${id}`, {
-    method: "PUT",
-    headers: getAuthHeaders(),
-    body: JSON.stringify(serviceData),
-  });
-  return handleResponse(res);
-};
-
-export const deleteService = async (id) => {
-  const res = await fetch(`${API_URL}/services/${id}`, {
-    method: "DELETE",
-    headers: getAuthHeaders(),
-  });
-  return handleResponse(res);
-};
-
-export const getServiceReviews = async (serviceId) => {
-  const res = await fetch(`${API_URL}/services/${serviceId}/reviews`);
-  return handleResponse(res);
-};
-
-export const getProviderReviews = async (providerId) => {
-  const res = await fetch(`${API_URL}/reviews/provider/${providerId}`);
-  return handleResponse(res);
-};
-
-export const createServiceOrder = async (serviceId, orderData = {}) => {
-  const res = await fetch(`${API_URL}/services/${serviceId}/orders`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify(orderData),
-  });
-  return handleResponse(res);
-};
-
-export const getServiceOrders = async () => {
-  const res = await fetch(`${API_URL}/service-orders`, {
-    headers: getAuthHeaders(),
-  });
-  return handleResponse(res);
-};
-
-export const updateServiceOrderStatus = async (id, Status) => {
-  const res = await fetch(`${API_URL}/service-orders/${id}/status`, {
-    method: "PATCH",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ Status }),
-  });
-  return handleResponse(res);
-};
-
-export const getServiceOrderReviews = async (orderId) => {
-  const res = await fetch(`${API_URL}/service-orders/${orderId}/reviews`, {
-    headers: getAuthHeaders(),
-  });
-  return handleResponse(res);
-};
-
-export const createServiceOrderReview = async (orderId, reviewData) => {
-  const res = await fetch(`${API_URL}/service-orders/${orderId}/reviews`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify(reviewData),
-  });
-  return handleResponse(res);
-};
+// ─── SERVICES (STUBBED) ────────────────────────────────────────────────────────
+export const getServices = async () => [];
+export const getServiceById = async () => null;
+export const createService = async () => ({});
+export const updateService = async () => ({});
+export const deleteService = async () => ({});
+export const getServiceReviews = async () => [];
+export const getProviderReviews = async () => [];
+export const createServiceOrder = async () => ({});
+export const getServiceOrders = async () => [];
+export const updateServiceOrderStatus = async () => ({});
+export const getServiceOrderReviews = async () => [];
+export const createServiceOrderReview = async () => ({});
 
 // ─── PROPOSALS ───────────────────────────────────────────────────────────────
 
 export const getProposalsByTask = async (taskId) => {
-  const res = await fetch(`${API_URL}/tasks/${taskId}/proposals`, {
+  const res = await fetch(`${API_URL}/gigs/${taskId}/proposals`, {
     headers: getAuthHeaders(),
   });
   return handleResponse(res);
@@ -203,7 +127,7 @@ export const getProposalById = async (id) => {
 };
 
 export const createProposal = async (taskId, proposalData) => {
-  const res = await fetch(`${API_URL}/tasks/${taskId}/proposals`, {
+  const res = await fetch(`${API_URL}/gigs/${taskId}/proposals`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify(proposalData),
@@ -337,73 +261,15 @@ export const deleteReview = async (id) => {
   return handleResponse(res);
 };
 
-// ─── MESSAGES ────────────────────────────────────────────────────────────────
+// ─── MESSAGES (STUBBED) ──────────────────────────────────────────────────────
+export const getConversations = async () => [];
+export const createConversation = async () => ({});
+export const getConversationMessages = async () => [];
+export const sendConversationMessage = async () => ({});
 
-export const getConversations = async () => {
-  const res = await fetch(`${API_URL}/messages/conversations`, {
-    headers: getAuthHeaders(),
-  });
-  return handleResponse(res);
-};
+// ─── NOTIFICATIONS (STUBBED) ─────────────────────────────────────────────────
+export const getNotifications = async () => [];
+export const markNotificationRead = async () => ({});
+export const markAllNotificationsRead = async () => ({});
+export const clearNotifications = async () => ({});
 
-export const createConversation = async (ParticipantID) => {
-  const res = await fetch(`${API_URL}/messages/conversations`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ ParticipantID }),
-  });
-  return handleResponse(res);
-};
-
-export const getConversationMessages = async (conversationId) => {
-  const res = await fetch(
-    `${API_URL}/messages/conversations/${conversationId}/messages`,
-    { headers: getAuthHeaders() },
-  );
-  return handleResponse(res);
-};
-
-export const sendConversationMessage = async (conversationId, Body) => {
-  const res = await fetch(
-    `${API_URL}/messages/conversations/${conversationId}/messages`,
-    {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ Body }),
-    },
-  );
-  return handleResponse(res);
-};
-
-// ─── NOTIFICATIONS ──────────────────────────────────────────────────────────
-
-export const getNotifications = async () => {
-  const res = await fetch(`${API_URL}/notifications`, {
-    headers: getAuthHeaders(),
-  });
-  return handleResponse(res);
-};
-
-export const markNotificationRead = async (id) => {
-  const res = await fetch(`${API_URL}/notifications/${id}/read`, {
-    method: "PATCH",
-    headers: getAuthHeaders(),
-  });
-  return handleResponse(res);
-};
-
-export const markAllNotificationsRead = async () => {
-  const res = await fetch(`${API_URL}/notifications/read-all`, {
-    method: "PATCH",
-    headers: getAuthHeaders(),
-  });
-  return handleResponse(res);
-};
-
-export const clearNotifications = async () => {
-  const res = await fetch(`${API_URL}/notifications`, {
-    method: "DELETE",
-    headers: getAuthHeaders(),
-  });
-  return handleResponse(res);
-};
